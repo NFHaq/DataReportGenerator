@@ -9,11 +9,16 @@
 #from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QDialog, QLabel
 
 
+
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtWidgets import QApplication, QMessageBox, QMainWindow, QAction
 from PyQt5.QtCore import QRegExp
 from PyQt5.QtGui import QRegExpValidator
 from dateutil.relativedelta import relativedelta
+
+from PyQt5.QtCore import pyqtSignal, QObject
+import xlsxwriter
+import win32com.client as win32
 
 
 import pandas as pd
@@ -99,6 +104,9 @@ class PandasModel(QtCore.QAbstractTableModel):
 
 #########################################################################################################
 
+class Communicate(QObject):
+    
+    closeApp = pyqtSignal()
 
 
 ####################################################################
@@ -139,13 +147,17 @@ class Ui_MainWindow(QMainWindow): # object
 
     def on_saveButton_clicked_coverTab(self):
         cover_df.loc[len(cover_df),'fact_code'] = self.fact_code_input.text()
-        cover_df.loc[len(cover_df)-1,'contact_type'] = self.contact_type_input.text()
+        cover_df.loc[len(cover_df)-1,'project_name'] = self.project_name_input.text()
+        if self.contact_type_comboBox.currentText() == 'Others':
+            cover_df.loc[len(cover_df)-1,'contact_type'] = self.contact_type_other_input.text()
+        else:    
+            cover_df.loc[len(cover_df)-1,'contact_type'] = self.contact_type_comboBox.currentText()
         cover_df.loc[len(cover_df)-1,'contact_name'] = self.contact_name_input.text()
         cover_df.loc[len(cover_df)-1,'designation'] = self.designation_input.text()
         cover_df.loc[len(cover_df)-1,'contact_number'] = self.contact_number_input.text()
         cover_df.loc[len(cover_df)-1,'email'] = self.email_input.text()
         cover_df.loc[len(cover_df)-1,'notes'] = self.notes_cover_input.text()
-
+        
 
         cover_df.reset_index(inplace=True)
         cover_df.drop('index', axis=1, inplace=True)
@@ -154,7 +166,7 @@ class Ui_MainWindow(QMainWindow): # object
         model = PandasModel(cover_df)
         self.tableView.setModel(model)
 
-        self.contact_type_input.clear()
+        #self.contact_type_input.clear()
         self.contact_name_input.clear()
         self.designation_input.clear()
         self.contact_number_input.clear()
@@ -167,6 +179,7 @@ class Ui_MainWindow(QMainWindow): # object
         #cover_df[['fact_code','contact_type', 'contact_name','designation','contact_number','email','notes']].to_csv(file_name,index=False)
         self.fact_code_input.clear()
         self.fact_code_label_output.setText(str(cover_df.fact_code.unique()[0]))
+        self.project_name_input.clear()
         self.warning_msg_label_3.setText("")
         print("cover DONE")
            
@@ -214,11 +227,8 @@ class Ui_MainWindow(QMainWindow): # object
                     visit_log_df.loc[len(visit_log_df)-1,'visit_type'] = self.visit_type_visitlog_comboBox.currentText()
                 else:
                     visit_log_df.loc[len(visit_log_df)-1,'visit_type'] = 'wave_'+self.visit_type_visitlog_input.text()
-                
-                visit_log_df.loc[len(visit_log_df)-1,'#_reports_requested'] = self.no_reports_requested_input.text()
-                visit_log_df.loc[len(visit_log_df)-1,'#_reports_collected'] = self.no_reports_collected_input.text()
-                visit_log_df.loc[len(visit_log_df)-1,'project_name'] = self.project_name_input.text()
-                #visit_log_df.loc[len(visit_log_df)-1,'absolute_varaibles_coverage_%'] = self.absolute_varaibles_coverage_input.text()
+
+
         
                 visit_log_df.reset_index(inplace=True)
                 visit_log_df.drop('index', axis=1, inplace=True) 
@@ -228,12 +238,7 @@ class Ui_MainWindow(QMainWindow): # object
                 self.tableView_2.setModel(model)
 
                 self.date_of_visit_label_output.clear()
-                #self.visit_type_visitlog_input.clear()
-                self.no_reports_requested_input.clear()
-                self.no_reports_collected_input.clear()
-                #self.soft_data_input.clear()
-                #self.absolute_varaibles_coverage_input.clear()
-
+              
 
 
     def on_doneButton_clicked_visit_logTab(self):
@@ -292,7 +297,7 @@ class Ui_MainWindow(QMainWindow): # object
         self.tableView_3.setModel(model)
 
         self.report_name_input.clear()
-        #self.format_input.clear()
+        self.notes_list_reports_sheet_input.clear()
         
 
     def on_doneButton_clicked_list_reports_sheetTab(self):
@@ -357,28 +362,41 @@ class Ui_MainWindow(QMainWindow): # object
 
     def on_saveButton_clicked_received_sheetTab(self):
 
-        received_sheet_df.loc[len(received_sheet_df),'report_name'] = self.report_name_comboBox.currentText()
-        received_sheet_df.loc[len(received_sheet_df)-1,'format'] = self.format_comboBox.currentText()
-        received_sheet_df.loc[len(received_sheet_df)-1,'project_phase'] = self.project_phase_label.text()
-        received_sheet_df.loc[len(received_sheet_df)-1,'start_time'] = self.start_time_output.text()
-        received_sheet_df.loc[len(received_sheet_df)-1,'end_time'] = self.end_time_output.text()
-        received_sheet_df.loc[len(received_sheet_df)-1,'notes'] = self.notes_received_sheet_input.text()
-        received_sheet_df.loc[len(received_sheet_df)-1,'action_notes'] = self.action_notes_input.text()
+        start_ = self.start_time_output.text()
+        start_ = start_.replace(start_.split(' ')[0],'').strip()
+        start_ = datetime.strptime(start_, "%b %d %Y").date()
 
-        received_sheet_df.reset_index(inplace=True)
-        received_sheet_df.drop('index', axis=1, inplace=True)  
+        end_ = self.end_time_output.text()
+        end_ = end_.replace(end_.split(' ')[0],'').strip()
+        end_ = datetime.strptime(end_, "%b %d %Y").date()
+
+        #
+        if end_ < start_:
+            self.warning_msg_label_4.setText('<span style="color:#ff0000;">WARNING!! End Time must be after start time, please check!!')
+        else:
+            self.warning_msg_label_4.setText('')
+            received_sheet_df.loc[len(received_sheet_df),'report_name'] = self.report_name_comboBox.currentText()
+            received_sheet_df.loc[len(received_sheet_df)-1,'format'] = self.format_comboBox.currentText()
+            received_sheet_df.loc[len(received_sheet_df)-1,'project_phase'] = self.project_phase_label.text()
+            received_sheet_df.loc[len(received_sheet_df)-1,'start_time'] = self.start_time_output.text()
+            received_sheet_df.loc[len(received_sheet_df)-1,'end_time'] = self.end_time_output.text()
+            received_sheet_df.loc[len(received_sheet_df)-1,'notes'] = self.notes_received_sheet_input.text()
+            received_sheet_df.loc[len(received_sheet_df)-1,'action_notes'] = self.action_notes_input.text()
+
+            received_sheet_df.reset_index(inplace=True)
+            received_sheet_df.drop('index', axis=1, inplace=True)  
         
        
-        ## showing DF data in tableView2
-        model = PandasModel(received_sheet_df)
-        self.tableView_4.setModel(model)
+            ## showing DF data in tableView2
+            model = PandasModel(received_sheet_df)
+            self.tableView_4.setModel(model)
 
         
-        #self.timeline_input.clear()
-        self.start_time_output.clear()
-        self.end_time_output.clear()
-        self.notes_received_sheet_input.clear()
-        self.action_notes_input.clear()
+            #self.timeline_input.clear()
+            self.start_time_output.clear()
+            self.end_time_output.clear()
+            self.notes_received_sheet_input.clear()
+            self.action_notes_input.clear()
         
 
     def on_doneButton_clicked_received_sheetTab(self):
@@ -417,7 +435,7 @@ class Ui_MainWindow(QMainWindow): # object
     def on_saveButton_clicked_data_inputTab(self):
 
         if (len(data_input_df)>0) and (self.ipa_data_point_comboBox.currentText() in data_input_df.ipa_data_point.unique()):
-            self.format_label_missing_note.setText("Error Message: This IPA Data Point has already been entered. CHECK!!")
+            self.format_label_missing_note.setText('<span style="color:#ff0000;">Error Message: This IPA Data Point has already been entered. CHECK!!')
         else:    
 
             self.format_label_missing_note.setText("")
@@ -527,7 +545,7 @@ class Ui_MainWindow(QMainWindow): # object
         nxt_dt_ = datetime.strptime(self.data_need_from_label.text(),"%b %d %Y").date()
 
         if self.request_sheet_calendarWidget.selectedDate()<nxt_dt_:
-            self.error_message_request_sheet_label.setText("Error Message: The selected date is earlier than Data Need From. Select the date correctly!!")
+            self.error_message_request_sheet_label.setText('<span style="color:#ff0000;">Error Message: Until date is earlier than Data Need From. Select the date correctly!!')
         else:
             
 
@@ -538,7 +556,7 @@ class Ui_MainWindow(QMainWindow): # object
             d_ = datetime.strptime(self.label_38.text().replace(self.label_38.text().split(' ')[0],'').strip(),"%b %d %Y").date()
 
             if d_ > limit_:
-                self.error_message_request_sheet_label.setText("Warning Message: Do you really want to collect more than 4 month's data? Please CHECK!!")
+                self.error_message_request_sheet_label.setText('<span style="color:#ff0000;">Warning Message: Do you really want to collect more than 4 month\'s data? Please CHECK!!')
             else:    
                 self.error_message_request_sheet_label.setText("")    
 
@@ -610,32 +628,71 @@ class Ui_MainWindow(QMainWindow): # object
 
 
 
-        file_name = 'Data_Report_'+str(cover_df.fact_code.unique()[0])+'.xlsx'
+        
         #initialze the excel writer
-        writer = pd.ExcelWriter(file_name, engine='xlsxwriter')
+        #writer = pd.ExcelWriter(file_name, engine='xlsxwriter')
 
         #store your dataframes in a  dict, where the key is the sheet name you want
         #global cover_df, visit_log_df, list_reports_sheet_df, received_sheet_df, data_input_df, request_sheet_df
 
-        frames = {'cover': cover_df[['fact_code','contact_type', 'contact_name','designation','contact_number','email','notes']], 
-        'visit_log': visit_log_df[['project_name','date_of_visit','visit_type','#_reports_requested','#_reports_collected','soft_data_%','absolute_varaibles_coverage_%']],
+        frames = {'cover': cover_df[['project_name','fact_code','contact_type', 'contact_name','designation','contact_number','email','notes']], 
+        'visit_log': visit_log_df[['date_of_visit','visit_type','#_reports_requested','#_reports_collected','soft_data_%','absolute_varaibles_coverage_%']],
         #'list_reports_sheet': list_reports_sheet_df[['sl_no','report_name','format']] , 
         'list_reports_sheet': list_reports_sheet_df[['report_name','format','notes']] , 
         'received_sheet':received_sheet_df[['report_name','format','project_phase','start_time','end_time','notes','action_notes']],
         'data_input':data_input_df[['report_name','format','sub_sheet','fac_data_point','ipa_data_point','data_availability','notes']], 
         'request_sheet':request_sheet_df[['visit_type','report_name','format','data_need_from','untill','breadth','notes']]}
 
+        file_name = 'Data_Report_'+str(cover_df.fact_code.unique()[0])+'.xlsx'
+
+        workbook = xlsxwriter.Workbook(file_name)
+
+        
+        
+        
+
         #now loop through and put each on a specific sheet
         for sheet, frame in  frames.items(): # .use .items for python 3.X
-            frame.to_excel(writer, sheet_name = sheet)
+            worksheet = workbook.add_worksheet(sheet)
+            #frame.to_excel(writer, sheet_name = sheet)
+            for col in frame.columns:
+                frame[col] = frame[col].replace(np.nan, '')
+
+
+            # Add a format. Green fill with dark green text
+            font_size_format1 = workbook.add_format({'align': 'center','bold':True, 'bg_color': '#C6EFCE', 'font_color': '#006100'})
+            font_size_format2 = workbook.add_format({'align': 'center'})
+
+            ## Add a format. Light red fill with dark red text.
+            format3 = workbook.add_format({'bg_color': '#FFC7CE','font_color': '#9C0006'})
+
+            # Write some data headers.
+            for i,elem in enumerate(list(frame.columns)):
+                worksheet.write(0,i,elem, font_size_format1)
+
+
+            for i in range(len(frame)):
+                for j in range(len(frame.columns)):
+                    worksheet.write(i+1,j, frame.loc[i][j], font_size_format2)    
+
+            for i,col in enumerate(list(frame.columns)):
+                width_ = len(col)
+
+                for elem in frame[col].unique():
+                    if len(elem)>width_:
+                        width_ = len(elem)        
+                        
+                worksheet.set_column(i,i, width_+5)
+
+            # Highlight the top 5 values in Green
+            worksheet.conditional_format('F2:G'+str(len(frame)+2) ,{'type': 'text','criteria': 'containing','value': 'not available', 'format': format3})    
+
 
         #critical last step
-        writer.save()   
+        workbook.close()   
 
         print("request_sheet DONE")
         print(file_name+' CREATION DONE')
-
-
 
 
 
@@ -650,8 +707,8 @@ class Ui_MainWindow(QMainWindow): # object
 
 
 
-    def setupUi(self, MainWindow):
-        MainWindow.setObjectName("MainWindow")
+    def setupUi(self, QMainWindow):
+        QMainWindow.setObjectName("MainWindow")
         MainWindow.resize(1202, 830)
         #MainWindow.setStyleSheet("background-color: rgb(170, 255, 255);")
         self.centralwidget = QtWidgets.QWidget(MainWindow)
@@ -688,6 +745,15 @@ class Ui_MainWindow(QMainWindow): # object
         self.fact_code_input = QtWidgets.QLineEdit(self.cover_tab)
         self.fact_code_input.setGeometry(QtCore.QRect(150, 20, 141, 31))
         self.fact_code_input.setObjectName("fact_code_input")
+
+        self.label_projectName = QtWidgets.QLabel(self.cover_tab)
+        self.label_projectName.setGeometry(QtCore.QRect(560, 10, 121, 51))
+        self.label_projectName.setObjectName("label_projectName")
+        self.label_projectName.setText("Project Name")
+
+        self.project_name_input = QtWidgets.QLineEdit(self.cover_tab)
+        self.project_name_input.setGeometry(QtCore.QRect(690, 20, 271, 41))
+        self.project_name_input.setObjectName("project_name_input")
         
         self.label_2 = QtWidgets.QLabel(self.cover_tab)
         self.label_2.setGeometry(QtCore.QRect(20, 70, 121, 51))
@@ -702,6 +768,32 @@ class Ui_MainWindow(QMainWindow): # object
         self.contact_type_comboBox.addItem("HR")
         self.contact_type_comboBox.addItem("IE")
         self.contact_type_comboBox.addItem("Others")
+        
+        self.contact_type_other_input = QtWidgets.QLineEdit(self.cover_tab)
+        self.contact_type_other_input.setGeometry(QtCore.QRect(150, 130, 271, 31))
+        self.contact_type_other_input.setObjectName("contact_type_other_input")
+
+        reg_ex_for_input = QRegExp("['']")
+        input_validator2 = QRegExpValidator(reg_ex_for_input, self.contact_type_other_input)
+        self.contact_type_other_input.setValidator(input_validator2)
+
+        def handle_other_contact_type():
+            if self.contact_type_comboBox.currentText() == "Others":
+                reg_ex_for_input = QRegExp("[a-zA-Z' ']+")
+                input_validator = QRegExpValidator(reg_ex_for_input, self.contact_type_other_input)
+                self.contact_type_other_input.setValidator(input_validator)
+            else:
+                reg_ex_for_input = QRegExp("['']")
+                input_validator2 = QRegExpValidator(reg_ex_for_input, self.contact_type_other_input)
+                self.contact_type_other_input.setValidator(input_validator2)
+   
+        
+
+        self.contact_type_comboBox.activated.connect(handle_other_contact_type)
+
+        
+                
+
         
         #self.contact_type_input = QtWidgets.QLineEdit(self.cover_tab)
         #self.contact_type_input.setGeometry(QtCore.QRect(150, 80, 391, 71))
@@ -730,6 +822,10 @@ class Ui_MainWindow(QMainWindow): # object
         self.contact_number_input = QtWidgets.QLineEdit(self.cover_tab)
         self.contact_number_input.setGeometry(QtCore.QRect(690, 190, 371, 31))
         self.contact_number_input.setObjectName("contact_number_input")
+
+        reg_ex_for_phn_number = QRegExp("[0-9,' ']+")
+        phn_number_validator = QRegExpValidator(reg_ex_for_phn_number, self.contact_number_input)
+        self.contact_number_input.setValidator(phn_number_validator)
         
         self.label_6 = QtWidgets.QLabel(self.cover_tab)
         self.label_6.setGeometry(QtCore.QRect(20, 260, 61, 51))
@@ -889,6 +985,8 @@ class Ui_MainWindow(QMainWindow): # object
         self.fact_code_label_output.setGeometry(QtCore.QRect(170, 40, 171, 51))
         self.fact_code_label_output.setText("")
         self.fact_code_label_output.setObjectName("fact_code_label_output")
+
+        
         
         self.label_8 = QtWidgets.QLabel(self.visit_log_tab)
         self.label_8.setGeometry(QtCore.QRect(340, 40, 121, 51))
@@ -937,42 +1035,42 @@ class Ui_MainWindow(QMainWindow): # object
         self.visit_type_visitlog_input.setObjectName("visit_type_visitlog_input")
         #self.visit_type_visitlog_input.clicked.connect(self.somecheckings)
 
-        reg_ex = QRegExp("[0-9]+")
-        input_validator = QRegExpValidator(reg_ex, self.visit_type_visitlog_input)
-        self.visit_type_visitlog_input.setValidator(input_validator)
+        #reg_ex = QRegExp("[0-9]+")
+        #input_validator = QRegExpValidator(reg_ex, self.visit_type_visitlog_input)
+        #self.visit_type_visitlog_input.setValidator(input_validator)
 
 
         
-        self.label_10 = QtWidgets.QLabel(self.visit_log_tab)
-        self.label_10.setGeometry(QtCore.QRect(30, 240, 181, 51))
-        self.label_10.setObjectName("label_10")
+        #self.label_10 = QtWidgets.QLabel(self.visit_log_tab)
+        #self.label_10.setGeometry(QtCore.QRect(30, 240, 181, 51))
+        #self.label_10.setObjectName("label_10")
         
-        self.no_reports_requested_input = QtWidgets.QLineEdit(self.visit_log_tab)
-        self.no_reports_requested_input.setGeometry(QtCore.QRect(220, 250, 141, 31))
-        self.no_reports_requested_input.setObjectName("no_reports_requested_input")
+        #self.no_reports_requested_input = QtWidgets.QLineEdit(self.visit_log_tab)
+        #self.no_reports_requested_input.setGeometry(QtCore.QRect(220, 250, 141, 31))
+        #self.no_reports_requested_input.setObjectName("no_reports_requested_input")
 
-        input_validator1 = QRegExpValidator(reg_ex, self.no_reports_requested_input)
-        self.no_reports_requested_input.setValidator(input_validator1)
+        #input_validator1 = QRegExpValidator(reg_ex, self.no_reports_requested_input)
+        #self.no_reports_requested_input.setValidator(input_validator1)
 
         
-        self.label_11 = QtWidgets.QLabel(self.visit_log_tab)
-        self.label_11.setGeometry(QtCore.QRect(30, 310, 171, 51))
-        self.label_11.setObjectName("label_11")
+        #self.label_11 = QtWidgets.QLabel(self.visit_log_tab)
+        #self.label_11.setGeometry(QtCore.QRect(30, 310, 171, 51))
+        #self.label_11.setObjectName("label_11")
         
-        self.no_reports_collected_input = QtWidgets.QLineEdit(self.visit_log_tab)
-        self.no_reports_collected_input.setGeometry(QtCore.QRect(220, 320, 141, 31))
-        self.no_reports_collected_input.setObjectName("no_reports_collected_input")
+        #self.no_reports_collected_input = QtWidgets.QLineEdit(self.visit_log_tab)
+        #self.no_reports_collected_input.setGeometry(QtCore.QRect(220, 320, 141, 31))
+        #self.no_reports_collected_input.setObjectName("no_reports_collected_input")
 
-        input_validator2 = QRegExpValidator(reg_ex, self.no_reports_collected_input)
-        self.no_reports_collected_input.setValidator(input_validator2)
+        #input_validator2 = QRegExpValidator(reg_ex, self.no_reports_collected_input)
+        #self.no_reports_collected_input.setValidator(input_validator2)
         
-        self.label_12 = QtWidgets.QLabel(self.visit_log_tab)
-        self.label_12.setGeometry(QtCore.QRect(40, 370, 171, 51))
-        self.label_12.setObjectName("label_12")
+        #self.label_12 = QtWidgets.QLabel(self.visit_log_tab)
+        #self.label_12.setGeometry(QtCore.QRect(40, 370, 171, 51))
+        #self.label_12.setObjectName("label_12")
         
-        self.project_name_input = QtWidgets.QLineEdit(self.visit_log_tab)
-        self.project_name_input.setGeometry(QtCore.QRect(220, 380, 141, 31))
-        self.project_name_input.setObjectName("project_name_input")
+        #self.project_name_input = QtWidgets.QLineEdit(self.visit_log_tab)
+        #self.project_name_input.setGeometry(QtCore.QRect(220, 380, 141, 31))
+        #self.project_name_input.setObjectName("project_name_input")
 
         self.error_msg_visitlog_label = QtWidgets.QLabel(self.visit_log_tab)
         self.error_msg_visitlog_label.setGeometry(QtCore.QRect(580, 440, 551, 51))
@@ -1057,20 +1155,6 @@ class Ui_MainWindow(QMainWindow): # object
 
         
 
-
-        #self.format_label_output = QtWidgets.QLabel(self.received_sheet_tab)
-        #self.format_label_output.setGeometry(QtCore.QRect(620, 40, 111, 41))
-        #self.format_label_output.setText("")
-        #self.format_label_output.setObjectName("format_label_output")
-
-        ###
-        ### ComboBox Code edit
-        ###
-        
-        ###
-        ###
-        ###
-        
         self.label_18 = QtWidgets.QLabel(self.received_sheet_tab)
         self.label_18.setGeometry(QtCore.QRect(740, 40, 151, 41))
         self.label_18.setObjectName("label_18")
@@ -1081,21 +1165,7 @@ class Ui_MainWindow(QMainWindow): # object
         self.project_phase_label.setObjectName("project_phase_label")
         self.project_phase_label.setText("")
         
-        #self.timeline_input_comboBox = QtWidgets.QComboBox(self.received_sheet_tab)
-        #self.timeline_input_comboBox.setGeometry(QtCore.QRect(900, 40, 251, 41))
-        #self.timeline_input_comboBox.setObjectName("timeline_input_comboBox")
-        #self.timeline_input_comboBox.addItem("base_line")
-        #self.timeline_input_comboBox.addItem("mid_line")
-        #self.timeline_input_comboBox.addItem("1st_follow_up")
-        #self.timeline_input_comboBox.addItem("2nd_follow_up")
-        #self.timeline_input_comboBox.addItem("3rd_follow_up")
-        #self.timeline_input_comboBox.addItem("4th_follow_up")
-        #self.timeline_input_comboBox.addItem("5th_follow_up")
 
-        
-        #self.timeline_input = QtWidgets.QLineEdit(self.received_sheet_tab)
-        #self.timeline_input.setGeometry(QtCore.QRect(730, 40, 251, 41))
-        #self.timeline_input.setObjectName("timeline_input")
         
         self.label_19 = QtWidgets.QLabel(self.received_sheet_tab)
         self.label_19.setGeometry(QtCore.QRect(30, 90, 111, 41))
@@ -1109,10 +1179,15 @@ class Ui_MainWindow(QMainWindow): # object
         self.start_time_calendarWidget = QtWidgets.QCalendarWidget(self.received_sheet_tab)
         self.start_time_calendarWidget.setGeometry(QtCore.QRect(30, 130, 481, 311))
         self.start_time_calendarWidget.setObjectName("start_time_calendarWidget")
+        self.start_time_calendarWidget.setFirstDayOfWeek(QtCore.Qt.Sunday)
+        
 
         # calenderWidget connect while selecting a date=> start time
         self.start_time_calendarWidget.clicked[QtCore.QDate].connect(self.showStartTime)
         
+        #start_time_output
+        #setMinimumDate(QDate(2006, 6, 19))
+
 
         self.label_20 = QtWidgets.QLabel(self.received_sheet_tab)
         self.label_20.setGeometry(QtCore.QRect(600, 90, 111, 41))
@@ -1126,7 +1201,9 @@ class Ui_MainWindow(QMainWindow): # object
         self.calendarWidget = QtWidgets.QCalendarWidget(self.received_sheet_tab)
         self.calendarWidget.setGeometry(QtCore.QRect(590, 130, 481, 311))
         self.calendarWidget.setObjectName("calendarWidget")
+        self.calendarWidget.setFirstDayOfWeek(QtCore.Qt.Sunday)
 
+       
         # calenderWidget connect while selecting a date=> end time
         self.calendarWidget.clicked[QtCore.QDate].connect(self.showEndTime)
         
@@ -1398,6 +1475,7 @@ class Ui_MainWindow(QMainWindow): # object
         self.request_sheet_calendarWidget = QtWidgets.QCalendarWidget(self.request_sheet_tab)
         self.request_sheet_calendarWidget.setGeometry(QtCore.QRect(630, 130, 491, 301))
         self.request_sheet_calendarWidget.setObjectName("request_sheet_calendarWidget")
+        self.request_sheet_calendarWidget.setFirstDayOfWeek(QtCore.Qt.Sunday)
 
         self.request_sheet_calendarWidget.clicked[QtCore.QDate].connect(self.showUntill)
 
@@ -1473,21 +1551,19 @@ class Ui_MainWindow(QMainWindow): # object
 
         #app.aboutToQuit.connect(self.closeEvent)
 
-        #quit = QAction("Quit", MainWindow)
-        #quit.triggered.connect(self.closeEvent)
-
         
+
+        #finish = QAction("Quit", self)
+        #finish.triggered.connect(self.closeEvent)
+
+       
         #menubar = QtWidgets.QMenuBar(MainWindow)
         #fmenu = menubar.addMenu("File")
-        #fmenu.addAction(quit)
+        #fmenu.addAction(finish)
 
-        finish = QAction("Quit", self)
-        finish.triggered.connect(self.closeEvent)
 
-        #menubar = self.menuBar()
-        menubar = QtWidgets.QMenuBar(MainWindow)
-        fmenu = menubar.addMenu("File")
-        fmenu.addAction(finish)
+        self.c = Communicate()
+        self.c.closeApp.connect(self.close) 
 
 
     def retranslateUi(self, MainWindow):
@@ -1508,9 +1584,9 @@ class Ui_MainWindow(QMainWindow): # object
         self.label_8.setText(_translate("MainWindow", "Date of Visit"))
         self.label_9.setText(_translate("MainWindow", "Visit Type"))
         self.label_13.setText(_translate("MainWindow","Wave"))
-        self.label_10.setText(_translate("MainWindow", "# Reports Requested"))
-        self.label_11.setText(_translate("MainWindow", "# Reports Collected"))
-        self.label_12.setText(_translate("MainWindow", "Project Name"))
+        #self.label_10.setText(_translate("MainWindow", "# Reports Requested"))
+        #self.label_11.setText(_translate("MainWindow", "# Reports Collected"))
+        #self.label_12.setText(_translate("MainWindow", "Project Name"))
         self.error_msg_visitlog_label.setText(_translate("MainWindow", ""))
 
         #self.label_13.setText(_translate("MainWindow", "Absolute Variables Coverage %"))
@@ -1553,7 +1629,7 @@ class Ui_MainWindow(QMainWindow): # object
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.data_input_tab), _translate("MainWindow", "Data Input"))
         self.label_28.setText(_translate("MainWindow", "Visit Type"))
         self.label_29.setText(_translate("MainWindow", "Report Name"))
-        self.label_30.setText(_translate("MainWindow", "Untill"))
+        self.label_30.setText(_translate("MainWindow", "Until"))
         self.dataNeedFromButton.setText(_translate("MainWindow",'Data need from?'))
         #self.label_31.setText(_translate("MainWindow", "Data need from"))
         self.label_32.setText(_translate("MainWindow", "Format"))
@@ -1565,6 +1641,10 @@ class Ui_MainWindow(QMainWindow): # object
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.request_sheet_tab), _translate("MainWindow", "Request Sheet"))
         self.label_38.setText(_translate("MainWindow",""))
 
+    def mousePressEvent(self, event):
+        
+        self.c.closeApp.emit()
+
 
     def closeEvent(self, event):
         close = QMessageBox.question(self,
@@ -1572,9 +1652,9 @@ class Ui_MainWindow(QMainWindow): # object
                                      "Sure?",
                                       QMessageBox.Yes | QMessageBox.No)
         if close == QMessageBox.Yes:
-            event.accept()
+            self.event.accept()
         else:
-            event.ignore()    
+            self.event.ignore()    
 
 
     #def closeEvent(self):
@@ -1657,7 +1737,7 @@ if __name__ == "__main__":
     global cover_df, visit_log_df, list_reports_sheet_df, received_sheet_df, data_input_df, request_sheet_df, ipa_data_point
 
     cover_df = pd.DataFrame(columns={'fact_code','contact_type', 'contact_name','designation','contact_number','email','notes'})
-    visit_log_df = pd.DataFrame(columns={'project_name','date_of_visit','visit_type','#_reports_requested','#_reports_collected','soft_data_%','absolute_varaibles_coverage_%'})
+    visit_log_df = pd.DataFrame(columns={'date_of_visit','visit_type','#_reports_requested','#_reports_collected','soft_data_%','absolute_varaibles_coverage_%'})
     #list_reports_sheet_df = pd.DataFrame(columns={'sl_no','report_name','format'})
     list_reports_sheet_df = pd.DataFrame(columns={'report_name','format','notes'})
     received_sheet_df = pd.DataFrame(columns={'report_name','format','project_phase','start_time','end_time','notes','action_notes'})
