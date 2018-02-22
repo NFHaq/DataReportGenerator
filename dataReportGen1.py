@@ -250,7 +250,7 @@ class Ui_MainWindow(QMainWindow): # object
         if 'wave_' in visit_log_df.visit_type.unique()[0]:
             self.visit_type_requestsheet_comboBox.addItem(str(int(visit_log_df.visit_type.unique()[0].split('_')[-1])+1))
         else:
-            phases_= ["base_line","mid_line","1st_follow_up","2nd_follow_up","3rd_follow_up","4th_follow_up","5th_follow_up"]
+            phases_= ["baseline","midline","1stfollowup","2ndfollowup","3rdfollowup","4thfollowup","5thfollowup"]
             for i,elem in enumerate(phases_):
                 if elem == visit_log_df.visit_type.unique()[0]:
                     self.visit_type_requestsheet_comboBox.addItem(phases_[i+1])
@@ -307,6 +307,10 @@ class Ui_MainWindow(QMainWindow): # object
         ## ipa data point => insert ComboBox
         for elem in ipa_data_point:
             self.ipa_data_point_comboBox.addItem(elem)
+
+        self.report_name_comboBox.clear()
+        self.report_name_comboBox_2.clear()
+        self.report_name_comboBox_3.clear()
 
         for elem in list_reports_sheet_df.report_name.unique():
             self.report_name_comboBox.addItem(elem)
@@ -635,13 +639,13 @@ class Ui_MainWindow(QMainWindow): # object
         #store your dataframes in a  dict, where the key is the sheet name you want
         #global cover_df, visit_log_df, list_reports_sheet_df, received_sheet_df, data_input_df, request_sheet_df
 
-        frames = {'cover': cover_df[['project_name','fact_code','contact_type', 'contact_name','designation','contact_number','email','notes']], 
-        'visit_log': visit_log_df[['date_of_visit','visit_type','#_reports_requested','#_reports_collected','soft_data_%','absolute_varaibles_coverage_%']],
-        #'list_reports_sheet': list_reports_sheet_df[['sl_no','report_name','format']] , 
-        'list_reports_sheet': list_reports_sheet_df[['report_name','format','notes']] , 
-        'received_sheet':received_sheet_df[['report_name','format','project_phase','start_time','end_time','notes','action_notes']],
-        'data_input':data_input_df[['report_name','format','sub_sheet','fac_data_point','ipa_data_point','data_availability','notes']], 
-        'request_sheet':request_sheet_df[['visit_type','report_name','format','data_need_from','untill','breadth','notes']]}
+        frames = {'cover': cover_df[['project_name','fact_code','contact_type', 'contact_name','designation','contact_number','email','notes']].copy(), 
+        'visit_log': visit_log_df[['date_of_visit','visit_type','#_reports_requested','#_reports_collected','soft_data_%','absolute_varaibles_coverage_%']].copy(),
+        #'list_reports_sheet': list_reports_sheet_df[['sl_no','report_name','format']].copy() , 
+        'list_reports_sheet': list_reports_sheet_df[['report_name','format','notes']].copy() , 
+        'received_sheet':received_sheet_df[['report_name','format','project_phase','start_time','end_time','notes','action_notes']].copy(),
+        'data_input':data_input_df[['report_name','format','sub_sheet','fac_data_point','ipa_data_point','data_availability','notes']].copy(), 
+        'request_sheet':request_sheet_df[['visit_type','report_name','format','data_need_from','untill','breadth','notes']].copy()}
 
         file_name = 'Data_Report_'+str(cover_df.fact_code.unique()[0])+'.xlsx'
 
@@ -664,7 +668,9 @@ class Ui_MainWindow(QMainWindow): # object
             font_size_format2 = workbook.add_format({'align': 'center'})
 
             ## Add a format. Light red fill with dark red text.
-            format3 = workbook.add_format({'bg_color': '#FFC7CE','font_color': '#9C0006'})
+            format3 = workbook.add_format({'bg_color': '#FFC7CE','font_color': '#9C0006','bold':True}) #red
+            format4 = workbook.add_format({'bg_color': '#C2F5FC','font_color': '#0477D6','bold':True}) #navy
+            format5 = workbook.add_format({'bg_color': '#F7E811','bold':True}) #yellow
 
             # Write some data headers.
             for i,elem in enumerate(list(frame.columns)):
@@ -684,8 +690,16 @@ class Ui_MainWindow(QMainWindow): # object
                         
                 worksheet.set_column(i,i, width_+5)
 
-            # Highlight the top 5 values in Green
-            worksheet.conditional_format('F2:G'+str(len(frame)+2) ,{'type': 'text','criteria': 'containing','value': 'not available', 'format': format3})    
+           
+            worksheet.conditional_format('F2:F'+str(len(frame)+2) ,{'type': 'text', 'criteria': 'containing','value': 'not available', 'format': format3})  
+            worksheet.conditional_format('F2:F'+str(len(frame)+2) ,{'type': 'text', 'criteria': 'containing', 'value': 'indirect', 'format': format5})
+            worksheet.conditional_format('F2:F'+str(len(frame)+2) ,{'type': 'text', 'criteria': 'containing','value': 'direct', 'format': format4})  
+
+            map_tab_color = { 'cover': '#3cc6fc', 'visit_log':'#a4f75b' , 'list_reports_sheet':'#f7b87e', 
+            'received_sheet': '#03bc16','data_input':'#d2a5f7' , 'request_sheet':'#e86d77'}
+
+            worksheet.set_tab_color(map_tab_color[sheet])
+            
 
 
         #critical last step
@@ -1022,13 +1036,13 @@ class Ui_MainWindow(QMainWindow): # object
         self.visit_type_visitlog_comboBox.setGeometry(QtCore.QRect(150, 110, 291, 31))
         self.visit_type_visitlog_comboBox.setObjectName("visit_type_visitlog_comboBox")
         self.visit_type_visitlog_comboBox.addItem(" ")
-        self.visit_type_visitlog_comboBox.addItem("base_line")
-        self.visit_type_visitlog_comboBox.addItem("mid_line")
-        self.visit_type_visitlog_comboBox.addItem("1st_follow_up")
-        self.visit_type_visitlog_comboBox.addItem("2nd_follow_up")
-        self.visit_type_visitlog_comboBox.addItem("3rd_follow_up")
-        self.visit_type_visitlog_comboBox.addItem("4th_follow_up")
-        self.visit_type_visitlog_comboBox.addItem("5th_follow_up")
+        self.visit_type_visitlog_comboBox.addItem("baseline")
+        self.visit_type_visitlog_comboBox.addItem("midline")
+        self.visit_type_visitlog_comboBox.addItem("1stfollowup")
+        self.visit_type_visitlog_comboBox.addItem("2ndfollowup")
+        self.visit_type_visitlog_comboBox.addItem("3rdfollowup")
+        self.visit_type_visitlog_comboBox.addItem("4thfollowup")
+        self.visit_type_visitlog_comboBox.addItem("5thfollowup")
 
         self.visit_type_visitlog_input = QtWidgets.QLineEdit(self.visit_log_tab)
         self.visit_type_visitlog_input.setGeometry(QtCore.QRect(220, 180, 91, 41))

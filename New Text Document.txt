@@ -1,0 +1,21 @@
+ '''
+    def __init__(self):
+        #QtGui.QMainWindow.__init__(self)
+        object.__init__(self)
+
+        #uic.loadUi('main_window.ui', self)
+
+        self.btnExit.clicked.connect(self.close)
+        self.actionExit.triggered.connect(self.close)
+
+    def closeEvent(self, event):
+        print("event")
+        reply = QtGui.QMessageBox.question(self, 'Message',
+            "Are you sure to quit?", QtGui.QMessageBox.Yes, QtGui.QMessageBox.No)
+
+        if reply == QtGui.QMessageBox.Yes:
+            event.accept()
+        else:
+            event.ignore()
+
+     '''        
